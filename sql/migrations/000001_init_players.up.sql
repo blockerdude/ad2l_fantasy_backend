@@ -44,10 +44,11 @@ CREATE TABLE player (
   name VARCHAR(128) NOT NULL
 );
 
-CREATE TABLE rosterplayer (
+CREATE TABLE roster_player (
   player_id INT NOT NULL,
   roster_id INT NOT NULL,
   CONSTRAINT fk_rosterplayer_player_id FOREIGN KEY(player_id) REFERENCES player(id),
   CONSTRAINT fk_rosterplayer_roster_id FOREIGN KEY(roster_id) REFERENCES roster(id),
   PRIMARY KEY (player_id, roster_id)
 );
+
