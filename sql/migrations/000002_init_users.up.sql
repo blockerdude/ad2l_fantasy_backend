@@ -1,31 +1,31 @@
-CREATE TABLE conference (
+CREATE TABLE authn (
   id SERIAL PRIMARY KEY,
   super_admin BOOLEAN NOT NULL DEFAULT FALSE,
   email VARCHAR(128) NOT NULL,
   display_name VARCHAR(128) NOT NULL,
   last_action TIMESTAMPTZ NOT NULL,
-  session_token VARCHAR(128) NOT NULL,
+  session_token VARCHAR(128) NOT NULL
 );
 
 CREATE TABLE league_participant (
+    id SERIAL PRIMARY KEY,
     league_id INT NOT NULL,
-    user_id INT NOT NULL,
+    authn_id INT NOT NULL,
     league_admin BOOLEAN NOT NULL DEFAULT FALSE,
     paid BOOLEAN NOT NULL DEFAULT FALSE,
     CONSTRAINT fk_leagueparticipant_league_id FOREIGN KEY(league_id) REFERENCES league(id),
-    CONSTRAINT fk_leagueparticipant_user_id FOREIGN KEY(user_id) REFERENCES user(id),
-    PRIMARY KEY (league_id, user_id) 
+    CONSTRAINT fk_leagueparticipant_authn_id FOREIGN KEY(authn_id) REFERENCES authn(id)
 );
 
 -- Note: At the moment player_ids will not have a foreign key relationship check
 -- it will be up to the business logic to enforce that valid player_ids are stored
 -- in the future this could change with a change to create a new table to store picks
-CREATE TABLE user_pick (
+CREATE TABLE authn_pick (
     league_participant_id INT NOT NULL,
     timeframe_id INT NOT NULL,
     player_ids INTEGER ARRAY, 
-    CONSTRAINT fk_userpick_leagueparticipant_id FOREIGN KEY(league_participant_id) REFERENCES league_participant(id),
-    CONSTRAINT fk_userpick_timeframe_id FOREIGN KEY(timeframe_id) REFERENCES timeframe(id),
+    CONSTRAINT fk_authnpick_leagueparticipant_id FOREIGN KEY(league_participant_id) REFERENCES league_participant(id),
+    CONSTRAINT fk_authnpick_timeframe_id FOREIGN KEY(timeframe_id) REFERENCES timeframe(id),
     PRIMARY KEY (league_participant_id, timeframe_id)
 );
 
@@ -54,8 +54,8 @@ CREATE TABLE player_score (
     PRIMARY KEY (timeframe_id, player_id, match_id)
 );
 
-CREATE TABLE user_score (
+CREATE TABLE authn_score (
     league_participant_id INT NOT NULL,
     timeframe_id INT NOT NULL,
-    score DOUBLE PRECISION NOT NULL,
+    score DOUBLE PRECISION NOT NULL
 );

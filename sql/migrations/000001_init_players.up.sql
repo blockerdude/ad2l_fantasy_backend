@@ -52,3 +52,10 @@ CREATE TABLE roster_player (
   PRIMARY KEY (player_id, roster_id)
 );
 
+CREATE TABLE league (
+  id SERIAL PRIMARY KEY,
+  season_id INT NOT NULL,
+  name VARCHAR(128) NOT NULL,
+  description VARCHAR NOT NULL,
+  CONSTRAINT fk_league_season_id FOREIGN KEY(season_id) REFERENCES season(id)
+);

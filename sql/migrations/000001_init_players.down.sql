@@ -1,3 +1,4 @@
+DROP TABLE league;
 DROP TABLE roster_player;
 DROP TABLE player;
 DROP TABLE roster;
