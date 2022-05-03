@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"dota2_fantasy/repo"
+	"dota2_fantasy/src/repo"
+	"dota2_fantasy/src/router"
+	"dota2_fantasy/src/util"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -20,9 +21,15 @@ import (
 var dbPool *pgxpool.Pool
 
 func main() {
+	secrets := util.LoadSecrets()
 
 	r := mux.NewRouter()
-	secrets := readSecrets()
+
+	r.HandleFunc("/hello", helloHandler)
+
+	ar := router.NewAuthnRouter(secrets)
+	ar.SetupRoutes(r)
+
 	pool, err := pgxpool.Connect(context.Background(), secrets.DBConnectionString)
 
 	if err != nil {
@@ -55,8 +62,6 @@ func main() {
 
 	log.Println(("working!"))
 
-	r.HandleFunc("/hello", helloHandler)
-
 	c := make(chan os.Signal, 1)
 	// We'll accept graceful shutdowns when quit via SIGINT (Ctrl+C)
 	// SIGKILL, SIGQUIT or SIGTERM (Ctrl+/) will not be caught.
@@ -66,32 +71,6 @@ func main() {
 	<-c
 
 	log.Println(("goodbye"))
-
-}
-
-type Secrets struct {
-	DBConnectionString string `json:"db_conn_string"`
-}
-
-func readSecrets() Secrets {
-	jsonFile, err := os.Open("secrets.json")
-
-	if err != nil {
-		panic(err)
-	}
-
-	defer jsonFile.Close()
-
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-
-	secrets := Secrets{}
-
-	err = json.Unmarshal(byteValue, &secrets)
-	if err != nil {
-		panic(err)
-	}
-
-	return secrets
 
 }
 
@@ -113,5 +92,5 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	fmt.Fprintf(w, "confs: %v", string(body))
+	fmt.Fprintf(w, "%v", string(body))
 }

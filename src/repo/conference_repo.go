@@ -2,7 +2,7 @@ package repo
 
 import (
 	"context"
-	"dota2_fantasy/model"
+	"dota2_fantasy/src/model"
 
 	"github.com/jackc/pgx/v4/pgxpool"
 )
