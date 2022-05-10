@@ -78,6 +78,10 @@ func helloHandler(w http.ResponseWriter, r *http.Request) {
 
 	confRepo := repo.NewConferenceRepo()
 
+	cookies := r.Cookies()
+
+	fmt.Printf("%s", cookies)
+
 	// conn := r.Context().Value("dbptr")
 
 	confs2, err := confRepo.GetAllConferences(dbPool)
