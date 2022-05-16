@@ -6,15 +6,25 @@ import (
 	"os"
 )
 
+type Config struct {
+	Secrets Secrets `json:"secrets"`
+	OIDC    OIDC    `json:"oidc"`
+}
+
 type Secrets struct {
 	DBConnectionString string `json:"db_conn_string"`
 	GoogleClientID     string `json:"google_client_id"`
 	GoogleClientSecret string `json:"google_client_secret"`
 }
 
-func LoadSecrets() Secrets {
+type OIDC struct {
+	ServerRedirectURL string `json:"server_redirect_url"`
+	UIBaseURL         string `json:"ui_base_url"`
+}
 
-	jsonFile, err := os.Open("secrets.json")
+func LoadSecrets() Config {
+
+	jsonFile, err := os.Open("conf.json")
 
 	if err != nil {
 		panic(err)
@@ -24,12 +34,12 @@ func LoadSecrets() Secrets {
 
 	byteValue, _ := ioutil.ReadAll(jsonFile)
 
-	secrets := Secrets{}
+	config := Config{}
 
-	err = json.Unmarshal(byteValue, &secrets)
+	err = json.Unmarshal(byteValue, &config)
 	if err != nil {
 		panic(err)
 	}
 
-	return secrets
+	return config
 }

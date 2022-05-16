@@ -1,6 +1,7 @@
 package router
 
 import (
+	"dota2_fantasy/src/service"
 	"dota2_fantasy/src/util"
 	"encoding/json"
 	"fmt"
@@ -8,29 +9,38 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"github.com/thanhpk/randstr"
+)
+
+const (
+	OIDC_COOKIE    = "oidc"
+	SESSION_COOKIE = "fantasy-session"
 )
 
 type AuthnRouter struct {
-	secrets util.Secrets
+	config   util.Config
+	authnSvc service.AuthnService
 }
 
-func NewAuthnRouter(secrets util.Secrets) *AuthnRouter {
-	return &AuthnRouter{secrets: secrets}
+func NewAuthnRouter(conf util.Config, authnSvc service.AuthnService) *AuthnRouter {
+	return &AuthnRouter{config: conf, authnSvc: authnSvc}
 }
 
 func (ar AuthnRouter) getRedirectURL(w http.ResponseWriter, r *http.Request) {
 
-	// https: //accounts.google.com/o/oauth2/v2/auth?&state=myCustomValueForState&prompt=select_account
 	baseURL := "https://accounts.google.com/o/oauth2/v2/auth"
-	redirectURL := "http://localhost:8080/api/handleOIDC"
+	redirectURL := ar.config.OIDC.ServerRedirectURL
 	responseType := "code"
 	scope := "https://www.googleapis.com/auth/userinfo.email"
 	accessType := "online"
-	state := "todo-state-value"
+	state := randstr.String(32)
 	prompt := "select_account"
 	redirect := fmt.Sprintf("%s?client_id=%s&redirect_uri=%s&response_type=%s&scope=%s&access_type=%s&state=%s&prompt=%s",
-		baseURL, ar.secrets.GoogleClientID, redirectURL, responseType, scope, accessType, state, prompt)
-	// w.WriteHeader(http.StatusSeeOther)
+		baseURL, ar.config.Secrets.GoogleClientID, redirectURL, responseType, scope, accessType, state, prompt)
+
+	cookie := http.Cookie{Name: OIDC_COOKIE, Value: state, HttpOnly: true, Secure: true, Path: "/"}
+
+	http.SetCookie(w, &cookie)
 	w.Write([]byte(redirect))
 }
 
@@ -56,80 +66,40 @@ func (ar AuthnRouter) handleOIDCResponse(w http.ResponseWriter, r *http.Request)
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
-	// TODO: need to validate response.State. Likely need to store something in a cookie
-
-	// Get Token
-	baseURL := "https://oauth2.googleapis.com/token"
-	redirectURI := "http://localhost:8080/api/handleOIDC"
-	grantType := "authorization_code"
-
-	postTokenCall := fmt.Sprintf("%s?client_id=%s&client_secret=%s&redirect_uri=%s&code=%s&grant_type=%s",
-		baseURL, ar.secrets.GoogleClientID, ar.secrets.GoogleClientSecret, redirectURI, response.code, grantType)
-
-	fmt.Println(postTokenCall)
-
-	tokenResponse, err := http.Post(postTokenCall, "application/json", nil)
-
+	oidcCookie, err := r.Cookie(OIDC_COOKIE)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
-	type googleTokenResponse struct {
-		AccessToken string `json:"access_token"`
-		Scope       string `json:"scope"`
-		TokenType   string `json:"token_type"`
-		IDToken     string `json:"id_token"`
-	}
-
-	tokenBody := &googleTokenResponse{}
-	decodeErr := json.NewDecoder(tokenResponse.Body).Decode(tokenBody)
-	if decodeErr != nil {
+	if oidcCookie.Value != response.state {
+		// State not matching indicates a malicious attempt
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
-	// Get emailInfo
-	emailCall := "https://www.googleapis.com/oauth2/v2/userinfo"
-
-	emailCallReq, err := http.NewRequest("GET", emailCall, nil)
+	authn, err := ar.authnSvc.HandleOIDCLogin(response.code)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 
-	emailCallReq.Header.Set("Authorization", fmt.Sprintf("Bearer %s", tokenBody.AccessToken))
-	client := http.Client{}
-	emailResponse, err := client.Do(emailCallReq)
+	body, err := json.Marshal(authn)
 	if err != nil {
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(http.StatusInternalServerError)
 	}
 
-	type fetchedEmail struct {
-		ID            string `json:"id"`
-		Email         string `json:"email"`
-		VerifiedEmail bool   `json:"verified_email"`
-		Picture       string `json:"picture"`
-	}
+	fmt.Fprintf(w, "%v", string(body))
 
-	emailRes := &fetchedEmail{}
-
-	decodeErr = json.NewDecoder(emailResponse.Body).Decode(emailRes)
-	if decodeErr != nil {
-		w.WriteHeader(http.StatusUnauthorized)
-	}
-
-	if !emailRes.VerifiedEmail {
-		w.WriteHeader(http.StatusUnauthorized)
-	}
-	// TODO: value here should be a session token
-	cookie := http.Cookie{Name: "OIDC-Cookie", Value: "my-test-value", HttpOnly: true, Secure: true, Path: "/"}
-
-	http.SetCookie(w, &cookie)
-	http.Redirect(w, r, "http://localhost:3000", http.StatusSeeOther)
+	deleteOIDCCookie := http.Cookie{Name: OIDC_COOKIE, Value: "", HttpOnly: true, Secure: true, MaxAge: -1, Path: "/"}
+	SessionCookie := http.Cookie{Name: SESSION_COOKIE, Value: "my-test-value", HttpOnly: true, Secure: true, Path: "/"}
+	http.SetCookie(w, &SessionCookie)
+	http.SetCookie(w, &deleteOIDCCookie)
+	http.Redirect(w, r, ar.config.OIDC.UIBaseURL, http.StatusSeeOther)
 }
 
 func (ar AuthnRouter) SetupRoutes(baseRouter *mux.Router) {
 	subRouter := baseRouter.PathPrefix("/api").Subrouter()
 
 	subRouter.HandleFunc("/startOIDC", ar.getRedirectURL)
+
 	subRouter.HandleFunc("/handleOIDC", ar.handleOIDCResponse)
 
 	// baseRouter.

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"context"
 	"dota2_fantasy/src/repo"
 	"dota2_fantasy/src/router"
+	"dota2_fantasy/src/service"
 	"dota2_fantasy/src/util"
-	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -14,36 +12,25 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
-	"github.com/jackc/pgx/v4/pgxpool"
 	_ "github.com/lib/pq"
 )
 
-var dbPool *pgxpool.Pool
-
 func main() {
-	secrets := util.LoadSecrets()
+	config := util.LoadSecrets()
+	dbConnection := util.NewDBConnection(config.Secrets)
+
+	if dbErr := dbConnection.EstablishConnection(); dbErr != nil {
+		panic(dbErr)
+	}
+
+	pool := dbConnection.GetPool()
+	defer pool.Close()
 
 	r := mux.NewRouter()
 
-	r.HandleFunc("/hello", helloHandler)
-
-	ar := router.NewAuthnRouter(secrets)
-	ar.SetupRoutes(r)
-
-	pool, err := pgxpool.Connect(context.Background(), secrets.DBConnectionString)
-
-	if err != nil {
-		panic(err)
-	}
-
-	err = pool.Ping(context.Background())
-	if err != nil {
-		panic(err)
-	}
-
-	defer pool.Close()
-
-	dbPool = pool
+	repos := repo.SetupRepos()
+	services := service.SetupServices(config, repos)
+	router.SetupRouters(config, services, r)
 
 	srv := &http.Server{
 		Addr: "0.0.0.0:8080",
@@ -72,29 +59,4 @@ func main() {
 
 	log.Println(("goodbye"))
 
-}
-
-func helloHandler(w http.ResponseWriter, r *http.Request) {
-
-	confRepo := repo.NewConferenceRepo()
-
-	cookies := r.Cookies()
-
-	fmt.Printf("%s", cookies)
-
-	// conn := r.Context().Value("dbptr")
-
-	confs2, err := confRepo.GetAllConferences(dbPool)
-	if err != nil {
-		fmt.Fprintf(w, "we failed!")
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-
-	body, err := json.Marshal(confs2)
-	if err != nil {
-		fmt.Fprintf(w, "we failed! %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-
-	fmt.Fprintf(w, "%v", string(body))
 }
