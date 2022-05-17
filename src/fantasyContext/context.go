@@ -15,5 +15,6 @@ func WithDBPool(ctx context.Context, pool *pgxpool.Pool) context.Context {
 }
 
 func GetDBPool(ctx context.Context) *pgxpool.Pool {
-	return ctx.Value(pool_value).(*pgxpool.Pool)
+	val := ctx.Value(pool_value)
+	return val.(*pgxpool.Pool)
 }

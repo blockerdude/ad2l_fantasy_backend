@@ -11,9 +11,9 @@ type Routers struct {
 	AuthnRouter AuthnRouter
 }
 
-func SetupRouters(config util.Config, services service.Services, baseRouter *mux.Router) Routers {
+func SetupRouters(config util.Config, mw Middleware, services service.Services, baseRouter *mux.Router) Routers {
 	routers := Routers{
-		AuthnRouter: *NewAuthnRouter(config, services.AuthnService),
+		AuthnRouter: *NewAuthnRouter(config, mw, services.AuthnService),
 	}
 
 	routers.AuthnRouter.SetupRoutes(baseRouter)

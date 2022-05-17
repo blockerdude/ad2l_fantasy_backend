@@ -3,7 +3,6 @@ package router
 import (
 	"dota2_fantasy/src/service"
 	"dota2_fantasy/src/util"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -18,12 +17,13 @@ const (
 )
 
 type AuthnRouter struct {
-	config   util.Config
-	authnSvc service.AuthnService
+	config     util.Config
+	middleware Middleware
+	authnSvc   service.AuthnService
 }
 
-func NewAuthnRouter(conf util.Config, authnSvc service.AuthnService) *AuthnRouter {
-	return &AuthnRouter{config: conf, authnSvc: authnSvc}
+func NewAuthnRouter(conf util.Config, middleware Middleware, authnSvc service.AuthnService) *AuthnRouter {
+	return &AuthnRouter{config: conf, middleware: middleware, authnSvc: authnSvc}
 }
 
 func (ar AuthnRouter) getRedirectURL(w http.ResponseWriter, r *http.Request) {
@@ -52,10 +52,10 @@ type googleOIDCResponse struct {
 	state    string
 }
 
-func (ar AuthnRouter) handleOIDCResponse(w http.ResponseWriter, r *http.Request) {
+func (ar AuthnRouter) handleOIDCResponse(w http.ResponseWriter, req *http.Request) {
 
 	response := googleOIDCResponse{}
-	queryRes := r.URL.Query()
+	queryRes := req.URL.Query()
 	response.code = queryRes.Get("code")
 	response.scope = queryRes.Get("scope")
 	response.prompt = queryRes.Get("prompt")
@@ -64,43 +64,40 @@ func (ar AuthnRouter) handleOIDCResponse(w http.ResponseWriter, r *http.Request)
 	response.authuser, err = strconv.Atoi(queryRes.Get("authuser"))
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
-	oidcCookie, err := r.Cookie(OIDC_COOKIE)
+	oidcCookie, err := req.Cookie(OIDC_COOKIE)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
 	if oidcCookie.Value != response.state {
 		// State not matching indicates a malicious attempt
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
 
-	authn, err := ar.authnSvc.HandleOIDCLogin(response.code)
+	authn, err := ar.authnSvc.HandleOIDCLogin(req.Context(), response.code)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
+		return
 	}
-
-	body, err := json.Marshal(authn)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
-	}
-
-	fmt.Fprintf(w, "%v", string(body))
 
 	deleteOIDCCookie := http.Cookie{Name: OIDC_COOKIE, Value: "", HttpOnly: true, Secure: true, MaxAge: -1, Path: "/"}
-	SessionCookie := http.Cookie{Name: SESSION_COOKIE, Value: "my-test-value", HttpOnly: true, Secure: true, Path: "/"}
+	SessionCookie := http.Cookie{Name: SESSION_COOKIE, Value: authn.SessionToken, HttpOnly: true, Secure: true, Path: "/"}
 	http.SetCookie(w, &SessionCookie)
 	http.SetCookie(w, &deleteOIDCCookie)
-	http.Redirect(w, r, ar.config.OIDC.UIBaseURL, http.StatusSeeOther)
+	http.Redirect(w, req, ar.config.OIDC.UIBaseURL, http.StatusSeeOther)
 }
 
 func (ar AuthnRouter) SetupRoutes(baseRouter *mux.Router) {
 	subRouter := baseRouter.PathPrefix("/api").Subrouter()
 
-	subRouter.HandleFunc("/startOIDC", ar.getRedirectURL)
+	subRouter.HandleFunc("/startOIDC", ar.middleware.WithBaseMiddleware(ar.getRedirectURL, ar.middleware.TestMW))
 
-	subRouter.HandleFunc("/handleOIDC", ar.handleOIDCResponse)
+	subRouter.HandleFunc("/handleOIDC", ar.middleware.WithBaseMiddleware(ar.handleOIDCResponse, ar.middleware.TestMW))
 
 	// baseRouter.
 }

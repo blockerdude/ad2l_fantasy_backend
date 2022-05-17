@@ -1,6 +1,8 @@
 package service
 
 import (
+	"context"
+	fantasycontext "dota2_fantasy/src/fantasyContext"
 	"dota2_fantasy/src/model"
 	"dota2_fantasy/src/repo"
 	"dota2_fantasy/src/util"
@@ -11,7 +13,7 @@ import (
 )
 
 type AuthnService interface {
-	HandleOIDCLogin(oidcCode string) (*model.Authn, error)
+	HandleOIDCLogin(ctx context.Context, oidcCode string) (*model.Authn, error)
 }
 
 func NewAuthnService(config util.Config, authnRepo repo.AuthnRepo) AuthnService {
@@ -33,7 +35,7 @@ type fetchedEmail struct {
 	Picture       string `json:"picture"`
 }
 
-func (a authnService) HandleOIDCLogin(oidcCode string) (*model.Authn, error) {
+func (a authnService) HandleOIDCLogin(ctx context.Context, oidcCode string) (*model.Authn, error) {
 
 	accessToken, err := a.getGoogleAccessToken(oidcCode)
 	if err != nil {
@@ -45,7 +47,7 @@ func (a authnService) HandleOIDCLogin(oidcCode string) (*model.Authn, error) {
 		return nil, err
 	}
 
-	return a.authnRepo.GetUserByEmail(nil, emailInfo.Email)
+	return a.authnRepo.GetUserByEmail(fantasycontext.GetDBPool(ctx), emailInfo.Email)
 }
 
 func (a authnService) getGoogleAccessToken(oidcCode string) (string, error) {

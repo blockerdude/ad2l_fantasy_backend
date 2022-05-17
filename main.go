@@ -28,9 +28,10 @@ func main() {
 
 	r := mux.NewRouter()
 
+	mw := router.NewMiddleware(dbConnection)
 	repos := repo.SetupRepos()
 	services := service.SetupServices(config, repos)
-	router.SetupRouters(config, services, r)
+	router.SetupRouters(config, mw, services, r)
 
 	srv := &http.Server{
 		Addr: "0.0.0.0:8080",
