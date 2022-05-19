@@ -13,7 +13,14 @@ import (
 )
 
 type AuthnService interface {
-	HandleOIDCLogin(ctx context.Context, oidcCode string) (*model.Authn, error)
+	// HandleOIDCLogin returns the session token
+	HandleOIDCLogin(ctx context.Context, oidcCode string) (string, error)
+
+	GetAuthnByToken(ctx context.Context, token string) (*model.Authn, error)
+
+	LogoutUser(ctx context.Context) error
+
+	UpdateLastActionTime(ctx context.Context) error
 }
 
 func NewAuthnService(config util.Config, authnRepo repo.AuthnRepo) AuthnService {
@@ -35,19 +42,26 @@ type fetchedEmail struct {
 	Picture       string `json:"picture"`
 }
 
-func (a authnService) HandleOIDCLogin(ctx context.Context, oidcCode string) (*model.Authn, error) {
+func (a authnService) HandleOIDCLogin(ctx context.Context, oidcCode string) (string, error) {
 
 	accessToken, err := a.getGoogleAccessToken(oidcCode)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	emailInfo, err := a.getGoogleEmailFromAccessToken(accessToken)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	return a.authnRepo.GetUserByEmail(fantasycontext.GetDBPool(ctx), emailInfo.Email)
+	pool := fantasycontext.GetDBPool(ctx)
+
+	authn, err := a.authnRepo.GetUserByEmail(pool, emailInfo.Email)
+	if err != nil {
+		return "", err
+	}
+
+	return a.authnRepo.GenerateNewSessionToken(pool, authn.ID)
 }
 
 func (a authnService) getGoogleAccessToken(oidcCode string) (string, error) {
@@ -106,4 +120,16 @@ func (a authnService) getGoogleEmailFromAccessToken(accessToken string) (*fetche
 	}
 
 	return emailRes, nil
+}
+
+func (a authnService) GetAuthnByToken(ctx context.Context, token string) (*model.Authn, error) {
+	return a.authnRepo.GetUserByToken(fantasycontext.GetDBPool(ctx), token)
+}
+
+func (a authnService) LogoutUser(ctx context.Context) error {
+	return a.authnRepo.ClearSessionToken(fantasycontext.GetDBPool(ctx), fantasycontext.GetAuthn(ctx).ID)
+}
+
+func (a authnService) UpdateLastActionTime(ctx context.Context) error {
+	return a.authnRepo.UpdateLastActionTime(fantasycontext.GetDBPool(ctx), fantasycontext.GetAuthn(ctx).ID)
 }

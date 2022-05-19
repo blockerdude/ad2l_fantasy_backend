@@ -28,9 +28,9 @@ func main() {
 
 	r := mux.NewRouter()
 
-	mw := router.NewMiddleware(dbConnection)
 	repos := repo.SetupRepos()
 	services := service.SetupServices(config, repos)
+	mw := router.NewMiddleware(dbConnection, services.AuthnService)
 	router.SetupRouters(config, mw, services, r)
 
 	srv := &http.Server{

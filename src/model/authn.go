@@ -7,6 +7,6 @@ type Authn struct {
 	SuperAdmin   bool      `json:"superAdmin"`
 	Email        string    `json:"email"`
 	DisplayName  string    `json:"displayName"`
-	LastAction   time.Time `json:"lastAction"`
-	SessionToken string    `json:"sessionToken"`
+	LastAction   time.Time `json:"-"`
+	SessionToken string    `json:"-"`
 }

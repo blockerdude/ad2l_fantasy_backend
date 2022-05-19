@@ -1,8 +1,10 @@
 package router
 
 import (
+	fantasycontext "dota2_fantasy/src/fantasyContext"
 	"dota2_fantasy/src/service"
 	"dota2_fantasy/src/util"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -79,25 +81,49 @@ func (ar AuthnRouter) handleOIDCResponse(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	authn, err := ar.authnSvc.HandleOIDCLogin(req.Context(), response.code)
+	sessionToken, err := ar.authnSvc.HandleOIDCLogin(req.Context(), response.code)
 	if err != nil {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
 
 	deleteOIDCCookie := http.Cookie{Name: OIDC_COOKIE, Value: "", HttpOnly: true, Secure: true, MaxAge: -1, Path: "/"}
-	SessionCookie := http.Cookie{Name: SESSION_COOKIE, Value: authn.SessionToken, HttpOnly: true, Secure: true, Path: "/"}
+	SessionCookie := http.Cookie{Name: SESSION_COOKIE, Value: sessionToken, HttpOnly: true, Secure: true, Path: "/"}
 	http.SetCookie(w, &SessionCookie)
 	http.SetCookie(w, &deleteOIDCCookie)
 	http.Redirect(w, req, ar.config.OIDC.UIBaseURL, http.StatusSeeOther)
 }
 
+func (ar AuthnRouter) getLoggedInAuthn(w http.ResponseWriter, req *http.Request) {
+
+	authn := fantasycontext.GetAuthn(req.Context())
+
+	res, err := json.Marshal(authn)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	w.Write(res)
+}
+
+func (ar AuthnRouter) logoutHandler(w http.ResponseWriter, req *http.Request) {
+	ar.authnSvc.LogoutUser(req.Context())
+
+	SessionCookie := http.Cookie{Name: SESSION_COOKIE, Value: "", HttpOnly: true, Secure: true, MaxAge: -1, Path: "/"}
+	http.SetCookie(w, &SessionCookie)
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (ar AuthnRouter) SetupRoutes(baseRouter *mux.Router) {
 	subRouter := baseRouter.PathPrefix("/api").Subrouter()
 
-	subRouter.HandleFunc("/startOIDC", ar.middleware.WithBaseMiddleware(ar.getRedirectURL, ar.middleware.TestMW))
+	subRouter.HandleFunc("/startOIDC", ar.middleware.WithBaseMiddleware(ar.getRedirectURL))
 
-	subRouter.HandleFunc("/handleOIDC", ar.middleware.WithBaseMiddleware(ar.handleOIDCResponse, ar.middleware.TestMW))
+	subRouter.HandleFunc("/handleOIDC", ar.middleware.WithBaseMiddleware(ar.handleOIDCResponse))
 
+	subRouter.HandleFunc("/authn", ar.middleware.WithBaseMiddleware(ar.getLoggedInAuthn, ar.middleware.RequireLogin)).Methods(http.MethodGet)
+
+	subRouter.Handle("/logout", ar.middleware.WithBaseMiddleware(ar.logoutHandler, ar.middleware.RequireLogin)).Methods(http.MethodGet)
 	// baseRouter.
 }
