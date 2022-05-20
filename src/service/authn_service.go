@@ -10,11 +10,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/jackc/pgx/v4"
 )
 
 type AuthnService interface {
 	// HandleOIDCLogin returns the session token
 	HandleOIDCLogin(ctx context.Context, oidcCode string) (string, error)
+
+	HandleOIDCSignup(ctx context.Context, oidcCode string) (string, error)
 
 	GetAuthnByToken(ctx context.Context, token string) (*model.Authn, error)
 
@@ -44,7 +48,7 @@ type fetchedEmail struct {
 
 func (a authnService) HandleOIDCLogin(ctx context.Context, oidcCode string) (string, error) {
 
-	accessToken, err := a.getGoogleAccessToken(oidcCode)
+	accessToken, err := a.getGoogleAccessToken(oidcCode, a.config.OIDC.LoginRedirectURL)
 	if err != nil {
 		return "", err
 	}
@@ -55,8 +59,7 @@ func (a authnService) HandleOIDCLogin(ctx context.Context, oidcCode string) (str
 	}
 
 	pool := fantasycontext.GetDBPool(ctx)
-
-	authn, err := a.authnRepo.GetUserByEmail(pool, emailInfo.Email)
+	authn, err := a.authnRepo.GetAuthnByEmail(pool, emailInfo.Email)
 	if err != nil {
 		return "", err
 	}
@@ -64,12 +67,43 @@ func (a authnService) HandleOIDCLogin(ctx context.Context, oidcCode string) (str
 	return a.authnRepo.GenerateNewSessionToken(pool, authn.ID)
 }
 
-func (a authnService) getGoogleAccessToken(oidcCode string) (string, error) {
+func (a authnService) HandleOIDCSignup(ctx context.Context, oidcCode string) (string, error) {
+	accessToken, err := a.getGoogleAccessToken(oidcCode, a.config.OIDC.SignupRedirectURL)
+	if err != nil {
+		return "", err
+	}
+
+	emailInfo, err := a.getGoogleEmailFromAccessToken(accessToken)
+	if err != nil {
+		return "", err
+	}
+
+	pool := fantasycontext.GetDBPool(ctx)
+	_, err = a.authnRepo.GetAuthnByEmail(pool, emailInfo.Email)
+	if err != pgx.ErrNoRows {
+		return "", err
+	}
+
+	newAuthn := &model.Authn{
+		SuperAdmin:  false,
+		Email:       emailInfo.Email,
+		DisplayName: "",
+	}
+
+	if err := a.authnRepo.Persist(pool, newAuthn); err != nil {
+		return "", err
+	}
+
+	return newAuthn.SessionToken, nil
+
+}
+
+func (a authnService) getGoogleAccessToken(oidcCode, redirectURL string) (string, error) {
 	baseURL := "https://oauth2.googleapis.com/token"
 	grantType := "authorization_code"
 
 	postTokenCall := fmt.Sprintf("%s?client_id=%s&client_secret=%s&redirect_uri=%s&code=%s&grant_type=%s",
-		baseURL, a.config.Secrets.GoogleClientID, a.config.Secrets.GoogleClientSecret, a.config.OIDC.ServerRedirectURL, oidcCode, grantType)
+		baseURL, a.config.Secrets.GoogleClientID, a.config.Secrets.GoogleClientSecret, redirectURL, oidcCode, grantType)
 
 	tokenResponse, err := http.Post(postTokenCall, "application/json", nil)
 	if err != nil {
@@ -123,7 +157,7 @@ func (a authnService) getGoogleEmailFromAccessToken(accessToken string) (*fetche
 }
 
 func (a authnService) GetAuthnByToken(ctx context.Context, token string) (*model.Authn, error) {
-	return a.authnRepo.GetUserByToken(fantasycontext.GetDBPool(ctx), token)
+	return a.authnRepo.GetAuthnByToken(fantasycontext.GetDBPool(ctx), token)
 }
 
 func (a authnService) LogoutUser(ctx context.Context) error {

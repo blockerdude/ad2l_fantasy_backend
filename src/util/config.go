@@ -18,7 +18,8 @@ type Secrets struct {
 }
 
 type OIDC struct {
-	ServerRedirectURL string `json:"server_redirect_url"`
+	LoginRedirectURL  string `json:"login_redirect_url"`
+	SignupRedirectURL string `json:"signup_redirect_url"`
 	UIBaseURL         string `json:"ui_base_url"`
 }
 

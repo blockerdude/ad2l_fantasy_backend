@@ -71,13 +71,14 @@ func (m middleware) RequireLogin(next http.Handler) http.HandlerFunc {
 			return
 		}
 
+		ctx = fantasycontext.WithAuthn(ctx, authn)
+		req = req.WithContext(ctx)
+
 		if err := m.authnSvc.UpdateLastActionTime(req.Context()); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		ctx = fantasycontext.WithAuthn(ctx, authn)
-		req = req.WithContext(ctx)
 		next.ServeHTTP(w, req)
 	})
 }
