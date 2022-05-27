@@ -1,0 +1,8 @@
+package model
+
+type League struct {
+	ID          int    `json:"-"`
+	SeasonID    int    `json:"-"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
