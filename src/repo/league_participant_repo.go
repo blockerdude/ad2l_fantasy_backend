@@ -7,17 +7,17 @@ import (
 	"github.com/jackc/pgx/v4/pgxpool"
 )
 
-type LeagueParticipantsRepo interface {
+type LeagueParticipantRepo interface {
 	Persist(pool *pgxpool.Pool, participant *model.LeagueParticipant) error
 }
 
-func NewLeagueParticipantsRepo() LeagueParticipantsRepo {
-	return leagueParticipantsRepo{}
+func NewLeagueParticipantRepo() LeagueParticipantRepo {
+	return leagueParticipantRepo{}
 }
 
-type leagueParticipantsRepo struct{}
+type leagueParticipantRepo struct{}
 
-func (r leagueParticipantsRepo) Persist(pool *pgxpool.Pool, participant *model.LeagueParticipant) error {
+func (r leagueParticipantRepo) Persist(pool *pgxpool.Pool, participant *model.LeagueParticipant) error {
 	err := pool.QueryRow(context.Background(), `INSERT INTO leage_participant (league_id, authn_id, league_admin, paid) VALUES ($1, $2, $3, $4)`,
 		participant.LeagueID, participant.AuthnID, participant.LeagueAdmin, participant.Paid).Scan(&participant.ID)
 
