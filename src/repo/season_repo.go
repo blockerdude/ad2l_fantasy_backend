@@ -18,8 +18,8 @@ func NewSeasonRepo() seasonRepo {
 type seasonRepo struct{}
 
 func (r seasonRepo) Persist(pool *pgxpool.Pool, roster *model.Season) error {
-	err := pool.QueryRow(context.Background(), `INSERT INTO season (converence_id, name, start_date, end_date) VALUES ($1, $2, $3, $4)`,
-		roster.ConferenceID, roster.Name, roster.StartDate, roster.EndDate).Scan(&roster.ID)
+	err := pool.QueryRow(context.Background(), `INSERT INTO season (object_id, converence_id, name, start_date, end_date) VALUES ($1, $2, $3, $4, $5)`,
+		roster.ObjectID, roster.ConferenceID, roster.Name, roster.StartDate, roster.EndDate).Scan(&roster.ID)
 
 	return err
 }

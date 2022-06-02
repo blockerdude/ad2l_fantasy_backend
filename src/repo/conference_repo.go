@@ -19,7 +19,7 @@ type conferenceRepo struct{}
 
 func (c conferenceRepo) GetAllConferences(pool *pgxpool.Pool) ([]model.Conference, error) {
 
-	rows, err := pool.Query(context.Background(), `select id, name, description from conference`)
+	rows, err := pool.Query(context.Background(), `SELECT id, object_id, name, description FROM CONFERENCE`)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +28,7 @@ func (c conferenceRepo) GetAllConferences(pool *pgxpool.Pool) ([]model.Conferenc
 	for rows.Next() {
 
 		conf := model.Conference{}
-		err = rows.Scan(&conf.ID, &conf.Name, &conf.Description)
+		err = rows.Scan(&conf.ID, &conf.ObjectID, &conf.Name, &conf.Description)
 		if err != nil {
 			return nil, err
 		}

@@ -1,0 +1,3 @@
+ALTER TABLE conference ADD object_id VARCHAR(128) NOT NULL;
+ALTER TABLE season ADD object_id VARCHAR(128) NOT NULL;
+ALTER TABLE league ADD object_id VARCHAR(128) NOT NULL;
