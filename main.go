@@ -30,7 +30,7 @@ func main() {
 
 	repos := repo.SetupRepos()
 	services := service.SetupServices(config, repos)
-	mw := router.NewMiddleware(dbConnection, services.AuthnService)
+	mw := router.NewMiddleware(dbConnection, services.AuthnService, repos.LeagueParticipantRepo)
 	router.SetupRouters(config, mw, services, r)
 
 	srv := &http.Server{
